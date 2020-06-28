@@ -53,6 +53,11 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 				continue
 			}
 
+			// Skip the owner of the server
+			if result.UserId == guild.OwnerID {
+				continue
+			}
+
 			// Calculate and check UNIX offsets
 			timeOffsetUnix := time.Now().Unix() - result.LastActivity.Unix()
 			unixMaxOffset := guildData.MaxDayInactivity * int64((24 * time.Hour.Seconds()))
