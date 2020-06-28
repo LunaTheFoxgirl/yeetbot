@@ -59,16 +59,17 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 
 			if timeOffsetUnix > unixMaxOffset {
 
-				// Tell the user that they have been kicked
-				channel, err := session.UserChannelCreate(result.UserId)
-				if err == nil {
-					session.ChannelMessageSend(channel.ID, strings.ReplaceAll(guildData.KickMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10)))
-				}
-
 				// Proceed to kick the user and add a reason for the audit log
 				err = session.GuildMemberDeleteWithReason(guild.ID, result.UserId, fmt.Sprintln("Inactivity for over ", guildData.MaxDayInactivity, " days. (Automated)"))
 				if err != nil {
 					log.Println(err)
+					continue
+				}
+
+				// Tell the user that they have been kicked
+				channel, err := session.UserChannelCreate(result.UserId)
+				if err == nil {
+					session.ChannelMessageSend(channel.ID, strings.ReplaceAll(guildData.KickMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10)))
 				}
 			}
 
