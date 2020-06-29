@@ -394,10 +394,44 @@ func handleUpdateData(session *discord.Session, data *discord.MessageCreate) {
 	user.UpdateActivity(stamp)
 }
 
-func handleForceAdd(session *discordgo.Session, guild *discord.Guild) int {
+func getMemberList(session *discord.Session, guild *discord.Guild) []*discord.Member {
+
+	// Scuffed list that has to reallocate a shitton of times
+	// Discord provides no mechanism to get the amount of users easily.
+	var memberList []*discordgo.Member = make([]*discord.Member, 0)
+
+	// Value which tells discord which user precedes the ones we're getting next
+	afterUser := ""
+
+	for {
+		// Gets a chunk of 1000 members
+		members, err := session.GuildMembers(guild.ID, afterUser, 1000)
+
+		// If it errors out we probably hit the end, break
+		if err != nil {
+			break
+		}
+
+		// Append members to member list
+		memberList = append(memberList, members...)
+
+		// If less than 1000 members were added then we're at the end of the list
+		if len(members) < 1000 {
+			break
+		}
+
+		// Make sure to set the "after-user" user
+		afterUser = memberList[len(memberList)-1].User.ID
+	}
+	return memberList
+}
+
+func handleForceAdd(session *discord.Session, guild *discord.Guild) int {
 	amount := 0
 
-	for _, member := range guild.Members {
+	memberList := getMemberList(session, guild)
+
+	for _, member := range memberList {
 		// Skip owner
 		if member.User.ID == guild.OwnerID {
 			continue
