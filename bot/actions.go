@@ -74,6 +74,12 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 				continue
 			}
 
+			// The bot really shouldn't be here, we'll delete it
+			if result.UserId == SelfId {
+				DeleteUser(result.GuildId, result.UserId)
+				continue
+			}
+
 			// Calculate and check UNIX offsets
 			timeOffsetUnix := time.Now().Unix() - result.LastActivity.Unix()
 			unixMaxOffset := guildData.MaxDayInactivity * int64((24 * time.Hour.Seconds()))
