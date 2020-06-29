@@ -38,7 +38,7 @@ func UpdateServerCount(session *discord.Session) {
 	serverCount := MongoClient.CountServers()
 
 	// Set game playing, discard any errors
-	err := session.UpdateStatus(0, fmt.Sprint("Yeeting on ", serverCount, " servers.."))
+	err := session.UpdateStatus(0, fmt.Sprint("Yeeting on ", serverCount, " servers..."))
 
 	if err != nil {
 		log.Println(err)
@@ -194,12 +194,13 @@ func HandleSelfJoin(session *discord.Session, data *discord.GuildCreate) {
 
 func HandleSelfLeave(session *discord.Session, data *discord.GuildDelete) {
 
-	// Update the server count
-	// We'll keep the server in the database just in case
-	UpdateServerCount(session)
-
-	// Though we'll delete the users it contained to save space
+	// Delete the data associated with the guild
+	// We don't want to waste database space on it
 	DeleteUsersForGuild(data.ID)
+	DeleteGuild(data.ID)
+
+	// Update the server count
+	UpdateServerCount(session)
 }
 
 func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
