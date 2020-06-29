@@ -50,6 +50,7 @@ func main() {
 	session.AddHandler(bot.HandleMessage)
 	session.AddHandler(bot.HandleUserJoin)
 	session.AddHandler(bot.HandleUserLeave)
+	session.AddHandler(bot.HandleUserVoice)
 	session.AddHandler(bot.HandleSelfJoin)
 	session.AddHandler(bot.HandleSelfLeave)
 
