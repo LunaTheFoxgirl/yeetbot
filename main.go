@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -15,8 +14,6 @@ import (
 	discord "github.com/bwmarrin/discordgo"
 	"go.mongodb.org/mongo-driver/bson"
 )
-
-var session *discord.Session
 
 func main() {
 
@@ -41,38 +38,62 @@ func main() {
 	}
 
 	// Log on to discord with bot token
-	session, err = discord.New("Bot " + config.Token)
+	session, err := discord.New("Bot " + config.Token)
+	session.Identify.Intents = discord.MakeIntent(discord.IntentsAllWithoutPrivileged | discord.IntentsGuildMembers)
 	defer session.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Add event handlers
-	log.Println("Adding event handlers")
+	log.Println("Adding event handlers...")
 	session.AddHandler(bot.HandleMessage)
 	session.AddHandler(bot.HandleUserJoin)
 	session.AddHandler(bot.HandleUserLeave)
 	session.AddHandler(bot.HandleSelfJoin)
+	session.AddHandler(bot.HandleSelfLeave)
 
-	// Scan servers
-	log.Println("Scanning for missed servers...")
-	scanServers()
+	// Session that does server updates.
+	session.AddHandler(func(s *discord.Session, ready *discord.Ready) {
 
-	// Begin the loop that occasionally kicks inactive people
-	log.Println("Bot started...")
-	go updateServers()
+		// Try to get the bots user instance
+		self, err := s.User("@me")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Get its ID
+		bot.SelfId = self.ID
+
+		// Scan servers
+		log.Println("Scanning for missed servers...")
+		scanServers(s)
+
+		// Begin the loop that occasionally kicks inactive people
+		log.Println("Bot started...")
+		go updateServers(s)
+	})
+
+	// Connect to discord
+	err = session.Open()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 }
 
-func scanServers() {
+func scanServers(session *discord.Session) {
 	for _, guild := range session.State.Guilds {
 
 		// Make sure guild exists in database.
 		_, err := bot.GetGuild(guild.ID)
 		if err != nil {
+
+			log.Println("Missed server", guild.ID, "...")
+			log.Println(err)
 
 			err = bot.CreateGuild(guild.ID)
 			if err != nil {
@@ -85,18 +106,11 @@ func scanServers() {
 	}
 }
 
-func updateServers() {
+func updateServers(session *discord.Session) {
 	for {
 
-		serverCount := bot.MongoClient.CountServers()
-
-		// Set game playing, discard any errors
-		_ = session.UpdateStatusComplex(discord.UpdateStatusData{
-			IdleSince: nil,
-			Game:      nil,
-			AFK:       false,
-			Status:    fmt.Sprint("Yeeting on ", serverCount, "servers... !yeet help for help"),
-		})
+		// Update the server count
+		bot.UpdateServerCount(session)
 
 		// Create a cursor over all the servers
 		cur, err := bot.MongoClient.ServersCollection().Find(context.Background(), bson.D{})

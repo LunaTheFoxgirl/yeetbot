@@ -2,10 +2,13 @@ package bot
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+var SelfId string
 
 type ConfigData struct {
 	Token            string `json:"token"`
@@ -14,7 +17,7 @@ type ConfigData struct {
 
 func createGuild(guildId string) GuildData {
 	var guildData GuildData
-	guildData.KickMessage = "**You have been yeeted from %time% due to inactivity.**"
+	guildData.KickMessage = "**You have been yeeted from %server% due to being inactive for %time% days.**"
 	guildData.GuildId = guildId
 	guildData.MaxDayInactivity = 30
 	return guildData
@@ -44,12 +47,14 @@ func GetGuild(guildId string) (*GuildData, error) {
 	result := MongoClient.ServersCollection().FindOne(context.Background(), bson.D{{"guildId", guildId}})
 	err := result.Err()
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 
 	// Decode and return
 	err = result.Decode(guildData)
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 
@@ -80,7 +85,7 @@ func (self *GuildData) UpdateMaxInactivity(days int64) error {
 	self.MaxDayInactivity = days
 
 	// Update database
-	_, err := MongoClient.ServersCollection().UpdateOne(context.Background(), filter, *self)
+	_, err := MongoClient.ServersCollection().ReplaceOne(context.Background(), filter, *self)
 	if err != nil {
 		return err
 	}
@@ -95,7 +100,7 @@ func (self *GuildData) GetUser(userId string) (*UserData, error) {
 	return GetUser(self.GuildId, userId)
 }
 
-func createUser(userId, guildId string, lastAcitivity time.Time) UserData {
+func createUser(guildId, userId string, lastAcitivity time.Time) UserData {
 	var userData UserData
 	userData.GuildId = guildId
 	userData.UserId = userId
@@ -104,8 +109,8 @@ func createUser(userId, guildId string, lastAcitivity time.Time) UserData {
 	return userData
 }
 
-func CreateUser(userId, guildId string, lastMessage time.Time) error {
-	data := createUser(userId, guildId, lastMessage)
+func CreateUser(guildId, userId string, lastMessage time.Time) error {
+	data := createUser(guildId, userId, lastMessage)
 	_, err := MongoClient.UsersCollection().InsertOne(context.Background(), data)
 	if err != nil {
 		return err
@@ -121,6 +126,14 @@ func DeleteUser(guildId, userId string) error {
 	return nil
 }
 
+func DeleteUsersForGuild(guildId string) error {
+	_, err := MongoClient.UsersCollection().DeleteMany(context.Background(), bson.D{{"guildId", guildId}})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func GetUser(guildId, userId string) (*UserData, error) {
 	var userData *UserData = new(UserData)
 
@@ -128,12 +141,14 @@ func GetUser(guildId, userId string) (*UserData, error) {
 	result := MongoClient.UsersCollection().FindOne(context.Background(), bson.D{{"guildId", guildId}, {"userId", userId}})
 	err := result.Err()
 	if err != nil {
+		log.Println(err, guildId, userId)
 		return nil, err
 	}
 
 	// Decode and return
 	err = result.Decode(userData)
 	if err != nil {
+		log.Println(err, guildId, userId)
 		return nil, err
 	}
 
@@ -154,7 +169,7 @@ func (self *UserData) UpdateActivity(time time.Time) error {
 	self.LastActivity = time
 
 	// Update database
-	_, err := MongoClient.UsersCollection().UpdateOne(context.Background(), filter, *self)
+	_, err := MongoClient.UsersCollection().ReplaceOne(context.Background(), filter, *self)
 	if err != nil {
 		return err
 	}
@@ -167,7 +182,7 @@ func (self *UserData) UpdateImmunity(immunity bool) error {
 	self.Immune = immunity
 
 	// Update database
-	_, err := MongoClient.UsersCollection().UpdateOne(context.Background(), filter, *self)
+	_, err := MongoClient.UsersCollection().ReplaceOne(context.Background(), filter, *self)
 	if err != nil {
 		return err
 	}

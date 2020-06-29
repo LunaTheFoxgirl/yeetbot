@@ -13,7 +13,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+const notFoundText = "Command not found"
+
 const helpText = "**Yeetbot**\n" +
+	"This bot yeets inactive users from your server, the following commands allow you to modify this behaviour.\n" +
+	"Activity is based on message creation and on voice state events (joining voice channel, moving, leaving, etc.).\n" +
 	"\n" +
 	"**Syntax**\n" +
 	"!yeet <command> <args...>\n" +
@@ -28,6 +32,17 @@ const helpText = "**Yeetbot**\n" +
 	"```"
 
 const cmdTag = "!yeet"
+
+func UpdateServerCount(session *discord.Session) {
+	serverCount := MongoClient.CountServers()
+
+	// Set game playing, discard any errors
+	err := session.UpdateStatus(0, fmt.Sprint("Yeeting on ", serverCount, " servers.."))
+
+	if err != nil {
+		log.Println(err)
+	}
+}
 
 func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildData GuildData) {
 
@@ -63,18 +78,22 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 			unixMaxOffset := guildData.MaxDayInactivity * int64((24 * time.Hour.Seconds()))
 
 			if timeOffsetUnix > unixMaxOffset {
+				log.Println(fmt.Sprint("Yeeting ", result.UserId, " due to inactivity..."))
+
+				// Tell the user that they have been kicked
+				channel, err := session.UserChannelCreate(result.UserId)
+				if err == nil {
+					timeRepl := strings.ReplaceAll(guildData.KickMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10))
+					serverRepl := strings.ReplaceAll(timeRepl, "%server%", guild.Name)
+
+					session.ChannelMessageSend(channel.ID, serverRepl)
+				}
 
 				// Proceed to kick the user and add a reason for the audit log
 				err = session.GuildMemberDeleteWithReason(guild.ID, result.UserId, fmt.Sprintln("Inactivity for over ", guildData.MaxDayInactivity, " days. (Automated)"))
 				if err != nil {
 					log.Println(err)
 					continue
-				}
-
-				// Tell the user that they have been kicked
-				channel, err := session.UserChannelCreate(result.UserId)
-				if err == nil {
-					session.ChannelMessageSend(channel.ID, strings.ReplaceAll(guildData.KickMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10)))
 				}
 			}
 
@@ -125,8 +144,49 @@ func HandleUserVoice(session *discord.Session, state *discord.VoiceStateUpdate) 
 	user.UpdateActivity(stamp)
 }
 
+func HandleSelfJoin(session *discord.Session, data *discord.GuildCreate) {
+
+	// Make sure to reuse old guilds
+	_, err := GetGuild(data.Guild.ID)
+	if err != nil {
+
+		// Try adding the guild
+		log.Println("Adding server", data.Guild.ID, "...")
+		err := CreateGuild(data.Guild.ID)
+		if err != nil {
+
+			// Something failed, delete the guild again also leave it
+			session.GuildLeave(data.Guild.ID)
+			err = DeleteGuild(data.Guild.ID)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+
+		// Update the server count
+		UpdateServerCount(session)
+	}
+}
+
+func HandleSelfLeave(session *discord.Session, data *discord.GuildDelete) {
+
+	// Update the server count
+	// We'll keep the server in the database just in case
+	UpdateServerCount(session)
+
+	// Though we'll delete the users it contained to save space
+	DeleteUsersForGuild(data.ID)
+}
+
 func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
 
+	// We DON'T want to handle the bot's messages.
+	// Otherwise the bot would try to kick it self, lol.
+	if data.Author.ID == SelfId {
+		return
+	}
+
+	// Get the guild
 	guild, err := session.Guild(data.GuildID)
 	if err != nil {
 		log.Println(err)
@@ -135,8 +195,8 @@ func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
 
 	// If the length of the message is long enough for a command
 	// And if a command tag is the first thing, handle that command
-	if len(data.Content) > len(cmdTag)+1 &&
-		data.Content[0:len(cmdTag)+1] == cmdTag+" " {
+	if len(data.Content) >= len(cmdTag) &&
+		data.Content[0:len(cmdTag)] == cmdTag {
 
 		handleCommand(session, data, guild)
 	} else {
@@ -149,30 +209,23 @@ func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
 	}
 }
 
-func HandleSelfJoin(session *discord.Session, data *discord.GuildCreate) {
-	// Try adding the guild
-	err := CreateGuild(data.Guild.ID)
-	if err != nil {
-
-		// Something failed, delete the guild again also leave it
-		session.GuildLeave(data.Guild.ID)
-		err = DeleteGuild(data.Guild.ID)
-		if err != nil {
-			log.Println(err)
-		}
-	}
-}
-
 func handleCommand(session *discord.Session, data *discord.MessageCreate, guild *discord.Guild) {
 
 	// Delete commands sent by unaothorized users
 	if data.Author.ID != guild.OwnerID {
+		log.Println(data.Author.ID, guild.OwnerID)
 		session.ChannelMessageDelete(data.ChannelID, data.ID)
 		return
 	}
 
+	// Help text needed (for "!yeet")
+	if len(data.Content) < len(cmdTag)+1 {
+		session.ChannelMessageSend(data.ChannelID, helpText)
+		return
+	}
+
 	// Split up command by spaces
-	command := strings.Split(data.Content[7:], " ")
+	command := strings.Split(data.Content[len(cmdTag)+1:], " ")
 
 	// Help text
 	if len(command) == 0 || command[0] == "help" {
@@ -193,7 +246,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 	switch strings.ToLower(command[0]) {
 	case "timeout":
 		if len(command) == 1 {
-			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Kick timeout for this server is ", guildData.MaxDayInactivity, "days**"))
+			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Kick timeout for this server is ", guildData.MaxDayInactivity, " days**"))
 			return
 		}
 
@@ -203,8 +256,12 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 			break
 		}
 
-		guildData.UpdateMaxInactivity(value)
-		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Kick timeout for this server set to ", guildData.MaxDayInactivity, "days**"))
+		err = guildData.UpdateMaxInactivity(value)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Kick timeout for this server set to ", guildData.MaxDayInactivity, " days**"))
 		break
 
 	case "isimmune":
@@ -216,6 +273,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 		if member == nil {
 
 			// User was not found
+			session.ChannelMessageSend(data.ChannelID, "User not found")
 			return
 		}
 
@@ -226,6 +284,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 			return
 		}
 
+		session.ChannelMessageDelete(data.ChannelID, data.ID)
 		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("User immunity is set to: ", guildUser.Immune))
 		break
 
@@ -238,6 +297,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 		if member == nil {
 
 			// User was not found
+			session.ChannelMessageSend(data.ChannelID, "User not found")
 			return
 		}
 
@@ -248,37 +308,23 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 			return
 		}
 
-		guildUser.UpdateImmunity(!guildUser.Immune)
-		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(member.Mention(), "had their immunity is set to: ", guildUser.Immune))
+		err = guildUser.UpdateImmunity(!guildUser.Immune)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		session.ChannelMessageDelete(data.ChannelID, data.ID)
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(member.Mention(), " had their immunity is set to: ", guildUser.Immune))
 		break
 
 	default:
+
+		// Alert the user that the command was not found
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(command[0], ": ", notFoundText))
 		session.ChannelMessageDelete(data.ChannelID, data.ID)
 		break
 	}
-}
-
-func mentionToMember(session *discordgo.Session, guildId, mention string) *discordgo.Member {
-
-	// It wasn't a mention after all
-	if mention[:2] != "<@" {
-		return nil
-	}
-
-	mention = mention[2:]
-
-	// It's a nickname mention
-	if mention[0:1] == "!" {
-		mention = mention[1:]
-	}
-
-	member, err := session.GuildMember(guildId, mention[:len(mention)-1])
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	return member
 }
 
 func handleUpdateData(session *discord.Session, data *discord.MessageCreate) {
@@ -308,4 +354,27 @@ func handleUpdateData(session *discord.Session, data *discord.MessageCreate) {
 
 	// Update the user's activity
 	user.UpdateActivity(stamp)
+}
+
+func mentionToMember(session *discordgo.Session, guildId, mention string) *discordgo.Member {
+
+	// It wasn't a mention after all
+	if mention[:2] != "<@" {
+		return nil
+	}
+
+	mention = mention[2:]
+
+	// It's a nickname mention
+	if mention[0:1] == "!" {
+		mention = mention[1:]
+	}
+
+	member, err := session.GuildMember(guildId, mention[:len(mention)-1])
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	return member
 }
