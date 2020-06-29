@@ -29,7 +29,8 @@ const helpText = "**Yeetbot**\n" +
 	" - timeout (days)     | Sets the timeout (in days) before a user gets kicked\n" +
 	" - isimmune (mention) | Gets the user's immunity to being kicked\n" +
 	" - immune (mention)   | Toggles the user's immunity to being kicked\n" +
-	"```"
+	"```\n" +
+	"**Bot written with <3 by Clipsey**\nSource: <https://github.com/Member1221/yeetbot>"
 
 const cmdTag = "!yeet"
 
