@@ -122,6 +122,23 @@ func HandleUserLeave(session *discord.Session, user *discord.GuildMemberRemove) 
 
 func HandleUserVoice(session *discord.Session, state *discord.VoiceStateUpdate) {
 
+	// Dont count the bot's activity
+	if state.UserID == SelfId {
+		return
+	}
+
+	// Get the guild
+	guild, err := session.Guild(state.GuildID)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// Don't count the owner's activity, they are automatically immune anyways
+	if state.UserID == guild.OwnerID {
+		return
+	}
+
 	// Get current UTC time
 	stamp := time.Now().UTC()
 
