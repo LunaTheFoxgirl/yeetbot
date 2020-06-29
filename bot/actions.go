@@ -29,6 +29,7 @@ const helpText = "**Yeetbot**\n" +
 	" - timeout (days)     | Sets the timeout (in days) before a user gets kicked\n" +
 	" - isimmune (mention) | Gets the user's immunity to being kicked\n" +
 	" - immune (mention)   | Toggles the user's immunity to being kicked\n" +
+	" - forceadd           | Forces all users (that make sense) to be added to yeetbots internal timing list\n" +
 	"```\n" +
 	"**Bot written with <3 by Clipsey**\nSource: <https://github.com/Member1221/yeetbot>"
 
@@ -277,7 +278,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 
 		value, err := strconv.ParseInt(command[1], 0, 64)
 		if err != nil {
-			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**", err, "**"))
+			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**", err.Error(), "**"))
 			break
 		}
 
@@ -343,6 +344,18 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(member.Mention(), " had their immunity is set to: ", guildUser.Immune))
 		break
 
+	case "forceadd":
+		guild, err := session.Guild(data.GuildID)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Force adding everyone...**"))
+		amount := handleForceAdd(session, guild)
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Done, added ", amount, " users...**"))
+		break
+
 	default:
 
 		// Alert the user that the command was not found
@@ -379,6 +392,41 @@ func handleUpdateData(session *discord.Session, data *discord.MessageCreate) {
 
 	// Update the user's activity
 	user.UpdateActivity(stamp)
+}
+
+func handleForceAdd(session *discordgo.Session, guild *discord.Guild) int {
+	amount := 0
+
+	for _, member := range guild.Members {
+		// Skip owner
+		if member.User.ID == guild.OwnerID {
+			continue
+		}
+
+		// Skip self
+		if member.User.ID == SelfId {
+			continue
+		}
+
+		currentTime := time.Now().UTC()
+
+		// See if the user exists
+		_, err := GetUser(guild.ID, member.User.ID)
+		if err != nil {
+
+			// User does not exist, create them
+			err := CreateUser(guild.ID, member.User.ID, currentTime)
+			if err != nil {
+
+				// Something bad happened?
+				log.Println(err)
+				continue
+			}
+
+			amount++
+		}
+	}
+	return amount
 }
 
 func mentionToMember(session *discordgo.Session, guildId, mention string) *discordgo.Member {
