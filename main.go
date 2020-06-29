@@ -54,6 +54,10 @@ func main() {
 	session.AddHandler(bot.HandleUserLeave)
 	session.AddHandler(bot.HandleSelfJoin)
 
+	// Scan servers
+	log.Println("Scanning for missed servers...")
+	scanServers()
+
 	// Begin the loop that occasionally kicks inactive people
 	log.Println("Bot started...")
 	go updateServers()
@@ -61,6 +65,24 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
+}
+
+func scanServers() {
+	for _, guild := range session.State.Guilds {
+
+		// Make sure guild exists in database.
+		_, err := bot.GetGuild(guild.ID)
+		if err != nil {
+
+			err = bot.CreateGuild(guild.ID)
+			if err != nil {
+
+				// Something bad happened?
+				log.Println(err)
+				return
+			}
+		}
+	}
 }
 
 func updateServers() {
