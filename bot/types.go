@@ -18,6 +18,7 @@ type ConfigData struct {
 func createGuild(guildId string) GuildData {
 	var guildData GuildData
 	guildData.KickMessage = "**You have been yeeted from %server% due to being inactive for %time% days.**"
+	guildData.WarningMessage = "**You will be kicked from %server% in %time% days due to inactivity unless you display some activity.**"
 	guildData.GuildId = guildId
 	guildData.MaxDayInactivity = 30
 	return guildData
@@ -64,6 +65,7 @@ func GetGuild(guildId string) (*GuildData, error) {
 
 type GuildData struct {
 	KickMessage      string `bson:"kickmsg"`
+	WarningMessage   string `bson:"warnmsg`
 	GuildId          string `bson:"guildId"`
 	MaxDayInactivity int64  `bson:"dayInactivity"`
 }

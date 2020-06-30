@@ -18,6 +18,7 @@ const notFoundText = "Command not found"
 const helpText = "**Yeetbot**\n" +
 	"This bot yeets inactive users from your server, the following commands allow you to modify this behaviour.\n" +
 	"Activity is based on message creation and on voice state events (joining voice channel, moving, leaving, etc.).\n" +
+	"The bot will warn you on the halfway mark as well as the final day before you get kicked\n" +
 	"\n" +
 	"**Syntax**\n" +
 	"!yeet <command> <args...>\n" +
@@ -81,11 +82,27 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 				continue
 			}
 
-			// Calculate and check UNIX offsets
-			timeOffsetUnix := time.Now().Unix() - result.LastActivity.Unix()
-			unixMaxOffset := guildData.MaxDayInactivity * int64((24 * time.Hour.Seconds()))
+			unixDay := int64((24 * time.Hour.Seconds()))
 
-			if timeOffsetUnix > unixMaxOffset {
+			// Calculate and check day offsets
+			dayOffset := (time.Now().Unix() - result.LastActivity.Unix()) / unixDay
+			halfwayMark := guildData.MaxDayInactivity / 2
+			lastDay := guildData.MaxDayInactivity - 1
+
+			// Send warning messages at the halfway mark as well as the last day
+			if dayOffset == halfwayMark || dayOffset == lastDay {
+				channel, err := session.UserChannelCreate(result.UserId)
+				if err == nil {
+					timeRepl := strings.ReplaceAll(guildData.WarningMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10))
+					serverRepl := strings.ReplaceAll(timeRepl, "%server%", guild.Name)
+
+					session.ChannelMessageSend(channel.ID, serverRepl)
+					continue
+				}
+			}
+
+			// After time's up kick the user
+			if dayOffset > guildData.MaxDayInactivity {
 				log.Println(fmt.Sprint("Yeeting ", result.UserId, " due to inactivity..."))
 
 				// Tell the user that they have been kicked
