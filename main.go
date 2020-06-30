@@ -146,6 +146,6 @@ func updateServers(session *discord.Session) {
 
 		// Update server lisiting every 10 minutes
 		cur.Close(context.Background())
-		time.Sleep(10 * time.Minute)
+		time.Sleep(1 * time.Hour)
 	}
 }

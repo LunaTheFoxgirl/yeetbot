@@ -64,10 +64,11 @@ func GetGuild(guildId string) (*GuildData, error) {
 }
 
 type GuildData struct {
-	KickMessage      string `bson:"kickmsg"`
-	WarningMessage   string `bson:"warnmsg`
-	GuildId          string `bson:"guildId"`
-	MaxDayInactivity int64  `bson:"dayInactivity"`
+	KickMessage      string    `bson:"kickmsg"`
+	WarningMessage   string    `bson:"warnmsg"`
+	GuildId          string    `bson:"guildId"`
+	MaxDayInactivity int64     `bson:"dayInactivity"`
+	LastUpdated      time.Time `bson:"lastUpdated"`
 }
 
 func (self *GuildData) UpdateMaxInactivity(days int64) error {
@@ -85,6 +86,19 @@ func (self *GuildData) UpdateMaxInactivity(days int64) error {
 	}
 
 	self.MaxDayInactivity = days
+
+	// Update database
+	_, err := MongoClient.ServersCollection().ReplaceOne(context.Background(), filter, *self)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (self *GuildData) UpdateLastUpdated(updateTime time.Time) error {
+	filter := bson.D{{"guildId", self.GuildId}}
+
+	self.LastUpdated = updateTime
 
 	// Update database
 	_, err := MongoClient.ServersCollection().ReplaceOne(context.Background(), filter, *self)

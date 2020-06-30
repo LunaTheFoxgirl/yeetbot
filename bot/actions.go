@@ -50,6 +50,17 @@ func UpdateServerCount(session *discord.Session) {
 
 func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildData GuildData) {
 
+	unixDay := int64(24 * time.Hour.Seconds())
+	currentDay := time.Now().Unix() / unixDay
+	lastUpdated := guildData.LastUpdated.Unix() / unixDay
+
+	// Don't update the server multiple times a day
+	if currentDay == lastUpdated {
+		return
+	}
+
+	guildData.UpdateLastUpdated(time.Now().UTC())
+
 	// Create a cursor over all the users on a server
 	cur, err := MongoClient.UsersCollection().Find(context.Background(), bson.D{{"guildId", guild.ID}})
 	if err != nil {
@@ -83,10 +94,10 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 				continue
 			}
 
-			unixDay := int64((24 * time.Hour.Seconds()))
+			lastActivity := result.LastActivity.Unix() / unixDay
 
 			// Calculate and check day offsets
-			dayOffset := (time.Now().Unix() - result.LastActivity.Unix()) / unixDay
+			dayOffset := currentDay - lastActivity
 			halfwayMark := guildData.MaxDayInactivity / 2
 			lastDay := guildData.MaxDayInactivity - 1
 
@@ -94,7 +105,7 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 			if dayOffset == halfwayMark || dayOffset == lastDay {
 				channel, err := session.UserChannelCreate(result.UserId)
 				if err == nil {
-					timeRepl := strings.ReplaceAll(guildData.WarningMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10))
+					timeRepl := strings.ReplaceAll(guildData.WarningMessage, "%time%", fmt.Sprint(guildData.MaxDayInactivity-dayOffset))
 					serverRepl := strings.ReplaceAll(timeRepl, "%server%", guild.Name)
 
 					session.ChannelMessageSend(channel.ID, serverRepl)
