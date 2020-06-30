@@ -230,6 +230,10 @@ func HandleSelfLeave(session *discord.Session, data *discord.GuildDelete) {
 func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
 
 	const mercyText string = "yeetbot please have mercy"
+	const memorialText string = "yeetbot memorial"
+	const memorialBody string = "30th of June, 2020\n" +
+		"_For the fallen whom got yeeted during The Great Yeetening of 2020_\n" +
+		"🇫"
 
 	// We DON'T want to handle the bot's messages.
 	// Otherwise the bot would try to kick it self, lol.
@@ -251,6 +255,11 @@ func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
 
 		// Stupid easter egg
 		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(data.Author.Mention(), " no"))
+	} else if len(data.Content) >= len(memorialText) &&
+		strings.ToLower(data.Content[0:len(memorialText)]) == memorialText {
+
+		// Stupid easter egg
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(memorialBody))
 	} else if len(data.Content) >= len(cmdTag) &&
 		data.Content[0:len(cmdTag)] == cmdTag {
 
