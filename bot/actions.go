@@ -388,7 +388,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 
 	default:
 
-		member := mentionToMember(session, guild.ID, command[1])
+		member := mentionToMember(session, guild.ID, command[0])
 		if member == nil {
 
 			// Alert the user that the command was not found
@@ -400,6 +400,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 		} else {
 			yeet(session, data.GuildID, member.User.ID, "**Thou hath been yeeteth by the server owner**", "Yeeted by owner")
 		}
+
 		break
 	}
 }
