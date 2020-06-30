@@ -31,7 +31,7 @@ const helpText = "**Yeetbot**\n" +
 	" - isimmune (mention) | Gets the user's immunity to being kicked\n" +
 	" - immune (mention)   | Toggles the user's immunity to being kicked\n" +
 	" - forceadd           | Forces all users (that make sense) to be added to yeetbots internal timing list\n" +
-	" - (mention)          | Forcefully yeets that person with a dumb message, you evil tater\n"
+	" - (mention)          | Forcefully yeets that person with a dumb message, you evil tater\n" +
 	"```\n" +
 	"**Bot written with <3 by Clipsey**\nSource: <https://github.com/Member1221/yeetbot>"
 
