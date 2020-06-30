@@ -31,6 +31,7 @@ const helpText = "**Yeetbot**\n" +
 	" - isimmune (mention) | Gets the user's immunity to being kicked\n" +
 	" - immune (mention)   | Toggles the user's immunity to being kicked\n" +
 	" - forceadd           | Forces all users (that make sense) to be added to yeetbots internal timing list\n" +
+	" - (mention)          | Forcefully yeets that person with a dumb message, you evil tater\n"
 	"```\n" +
 	"**Bot written with <3 by Clipsey**\nSource: <https://github.com/Member1221/yeetbot>"
 
@@ -103,26 +104,31 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 
 			// After time's up kick the user
 			if dayOffset > guildData.MaxDayInactivity {
-				log.Println(fmt.Sprint("Yeeting ", result.UserId, " due to inactivity..."))
 
-				// Tell the user that they have been kicked
-				channel, err := session.UserChannelCreate(result.UserId)
-				if err == nil {
-					timeRepl := strings.ReplaceAll(guildData.KickMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10))
-					serverRepl := strings.ReplaceAll(timeRepl, "%server%", guild.Name)
+				timeRepl := strings.ReplaceAll(guildData.KickMessage, "%time%", strconv.FormatInt(guildData.MaxDayInactivity, 10))
+				serverRepl := strings.ReplaceAll(timeRepl, "%server%", guild.Name)
 
-					session.ChannelMessageSend(channel.ID, serverRepl)
-				}
-
-				// Proceed to kick the user and add a reason for the audit log
-				err = session.GuildMemberDeleteWithReason(guild.ID, result.UserId, fmt.Sprintln("Inactivity for over ", guildData.MaxDayInactivity, " days. (Automated)"))
-				if err != nil {
-					log.Println(err)
-					continue
-				}
+				// Do the yeetin'
+				yeet(session, result.GuildId, result.UserId, serverRepl, fmt.Sprintln("Inactivity for over ", guildData.MaxDayInactivity, " days. (Automated)"))
 			}
 
 		}
+	}
+}
+
+func yeet(session *discord.Session, guildId, userId, message, reason string) {
+	log.Println(fmt.Sprint("Yeeting ", userId, " due to inactivity..."))
+
+	// Tell the user that they have been kicked
+	channel, err := session.UserChannelCreate(userId)
+	if err == nil {
+		session.ChannelMessageSend(channel.ID, message)
+	}
+
+	// Proceed to kick the user and add a reason for the audit log
+	err = session.GuildMemberDeleteWithReason(guildId, userId, reason)
+	if err != nil {
+		log.Println(err)
 	}
 }
 
@@ -223,6 +229,8 @@ func HandleSelfLeave(session *discord.Session, data *discord.GuildDelete) {
 
 func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
 
+	const mercyText string = "yeetbot please have mercy"
+
 	// We DON'T want to handle the bot's messages.
 	// Otherwise the bot would try to kick it self, lol.
 	if data.Author.ID == SelfId {
@@ -238,7 +246,12 @@ func HandleMessage(session *discord.Session, data *discord.MessageCreate) {
 
 	// If the length of the message is long enough for a command
 	// And if a command tag is the first thing, handle that command
-	if len(data.Content) >= len(cmdTag) &&
+	if len(data.Content) >= len(mercyText) &&
+		strings.ToLower(data.Content[0:len(mercyText)]) == mercyText {
+
+		// Stupid easter egg
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(data.Author.Mention(), " no"))
+	} else if len(data.Content) >= len(cmdTag) &&
 		data.Content[0:len(cmdTag)] == cmdTag {
 
 		handleCommand(session, data, guild)
@@ -375,9 +388,18 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 
 	default:
 
-		// Alert the user that the command was not found
-		session.ChannelMessageSend(data.ChannelID, fmt.Sprint(command[0], ": ", notFoundText))
-		session.ChannelMessageDelete(data.ChannelID, data.ID)
+		member := mentionToMember(session, guild.ID, command[1])
+		if member == nil {
+
+			// Alert the user that the command was not found
+			session.ChannelMessageSend(data.ChannelID, fmt.Sprint(command[0], ": ", notFoundText))
+			session.ChannelMessageDelete(data.ChannelID, data.ID)
+
+			// User was not found
+			return
+		} else {
+			yeet(session, data.GuildID, member.User.ID, "**Thou hath been yeeteth by the server owner**", "Yeeted by owner")
+		}
 		break
 	}
 }
