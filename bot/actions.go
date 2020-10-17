@@ -28,6 +28,12 @@ const helpText = "**Yeetbot**\n" +
 	" - help               | Shows this help dialog\n" +
 	" - timeout            | Gets the timeout (in days) before a user gets kicked\n" +
 	" - timeout (days)     | Sets the timeout (in days) before a user gets kicked\n" +
+	" - warntimeout (days) | Sets the timeout (in days) before a user gets warned, set to -1 to show the warning at the halfway mark\n" +
+	" - warntimeout        | Gets the timeout (in days) before a user gets warned\n" +
+	" - kickmsg            | Gets the message displayed when a user gets kicked\n" +
+	" - kickmsg (msg)      | Sets the message displayed when a user gets kicked\n" +
+	" - warnmsg            | Gets the message displayed when a user gets warned\n" +
+	" - warnmsg (msg)      | Sets the message displayed when a user gets warned\n" +
 	" - isimmune (mention) | Gets the user's immunity to being kicked\n" +
 	" - immune (mention)   | Toggles the user's immunity to being kicked\n" +
 	" - forceadd           | Forces all users (that make sense) to be added to yeetbots internal timing list\n" +
@@ -100,6 +106,11 @@ func HandleKickForGuild(session *discord.Session, guild *discord.Guild, guildDat
 			dayOffset := currentDay - lastActivity
 			halfwayMark := guildData.MaxDayInactivity / 2
 			lastDay := guildData.MaxDayInactivity - 1
+
+			// If the admin has specified a day offset for the warning use that instead
+			if guildData.FirstWarnOffset >= 5 {
+				halfwayMark = guildData.FirstWarnOffset
+			}
 
 			// Send warning messages at the halfway mark as well as the last day
 			if dayOffset == halfwayMark || dayOffset == lastDay {
@@ -338,6 +349,77 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 			return
 		}
 		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Kick timeout for this server set to ", guildData.MaxDayInactivity, " days**"))
+		break
+
+	case "warntimeout":
+
+		if len(command) == 1 {
+
+			// Get the current offset
+			wOffset := fmt.Sprint(guildData.FirstWarnOffset)
+			if guildData.FirstWarnOffset == -1 {
+				wOffset = fmt.Sprint(guildData.MaxDayInactivity/2, "(auto)")
+			}
+
+			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Warning timeout for this server is ", wOffset, " days**"))
+			return
+		}
+
+		value, err := strconv.ParseInt(command[1], 0, 64)
+		if err != nil {
+			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**", err.Error(), "**"))
+			break
+		}
+
+		err = guildData.UpdateWarnOffset(value)
+		if err != nil {
+			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**", err.Error(), "**"))
+			break
+		}
+
+		// Get the current offset
+		wOffset := fmt.Sprint(guildData.FirstWarnOffset)
+		if guildData.FirstWarnOffset == -1 {
+			wOffset = fmt.Sprint(guildData.MaxDayInactivity/2, "(auto)")
+		}
+
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Warning timeout for this server set to ", wOffset, " days**"))
+		break
+
+	case "kickmsg":
+
+		if len(command) == 1 {
+			session.ChannelMessageSend(data.ChannelID, guildData.KickMessage)
+			return
+		}
+
+		msg := strings.Join(command[1:], " ")
+
+		err = guildData.SetKickMsg(msg)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Kick messaged updated**"))
+		break
+
+	case "warnmsg":
+
+		if len(command) == 1 {
+			session.ChannelMessageSend(data.ChannelID, guildData.KickMessage)
+			return
+		}
+
+		msg := strings.Join(command[1:], " ")
+
+		err = guildData.SetWarnMsg(msg)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Warning messaged updated**"))
 		break
 
 	case "isimmune":

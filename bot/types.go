@@ -2,6 +2,8 @@ package bot
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -21,6 +23,7 @@ func createGuild(guildId string) GuildData {
 	guildData.WarningMessage = "**You will be kicked from %server% in %time% days due to inactivity unless you display some activity.**"
 	guildData.GuildId = guildId
 	guildData.MaxDayInactivity = 30
+	guildData.FirstWarnOffset = -1
 	return guildData
 }
 
@@ -69,6 +72,58 @@ type GuildData struct {
 	GuildId          string    `bson:"guildId"`
 	MaxDayInactivity int64     `bson:"dayInactivity"`
 	LastUpdated      time.Time `bson:"lastUpdated"`
+	FirstWarnOffset  int64     `bson:"warnOffset"`
+}
+
+func (self *GuildData) UpdateWarnOffset(offset int64) error {
+	filter := bson.D{{"guildId", self.GuildId}}
+
+	// We don't want to just instakick everybody
+	// Minimum is 5 days
+	// -1 is a special value that enables the automatic value
+	if offset < 5 && offset != -1 {
+		offset = 5
+	}
+
+	// We want to throw an error if the offset is in an invalid range.
+	if offset > self.MaxDayInactivity-2 {
+		return errors.New(fmt.Sprintf("Offset exceeded max inactivity time of %s", self.MaxDayInactivity-2))
+	}
+
+	self.FirstWarnOffset = offset
+
+	// Update database
+	_, err := MongoClient.ServersCollection().ReplaceOne(context.Background(), filter, *self)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (self *GuildData) SetKickMsg(msg string) error {
+	filter := bson.D{{"guildId", self.GuildId}}
+
+	self.KickMessage = msg
+
+	// Update database
+	_, err := MongoClient.ServersCollection().ReplaceOne(context.Background(), filter, *self)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (self *GuildData) SetWarnMsg(msg string) error {
+	filter := bson.D{{"guildId", self.GuildId}}
+
+	self.WarningMessage = msg
+
+	// Update database
+	_, err := MongoClient.ServersCollection().ReplaceOne(context.Background(), filter, *self)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (self *GuildData) UpdateMaxInactivity(days int64) error {
@@ -86,6 +141,11 @@ func (self *GuildData) UpdateMaxInactivity(days int64) error {
 	}
 
 	self.MaxDayInactivity = days
+
+	// If for some reason our warning offset is past our inactivity day - 2 then we'll reset the warning offset
+	if self.FirstWarnOffset > self.MaxDayInactivity-2 {
+		self.FirstWarnOffset = -1
+	}
 
 	// Update database
 	_, err := MongoClient.ServersCollection().ReplaceOne(context.Background(), filter, *self)
