@@ -87,7 +87,7 @@ func (self *GuildData) UpdateWarnOffset(offset int64) error {
 
 	// We want to throw an error if the offset is in an invalid range.
 	if offset > self.MaxDayInactivity-2 {
-		return errors.New(fmt.Sprintf("Offset exceeded max inactivity time of %s", self.MaxDayInactivity-2))
+		return errors.New(fmt.Sprint("Offset exceeded max inactivity time of ", self.MaxDayInactivity-2))
 	}
 
 	self.FirstWarnOffset = offset

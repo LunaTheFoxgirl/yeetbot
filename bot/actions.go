@@ -358,7 +358,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 			// Get the current offset
 			wOffset := fmt.Sprint(guildData.FirstWarnOffset)
 			if guildData.FirstWarnOffset == -1 {
-				wOffset = fmt.Sprint(guildData.MaxDayInactivity/2, "(auto)")
+				wOffset = fmt.Sprint(guildData.MaxDayInactivity/2, " (auto)")
 			}
 
 			session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Warning timeout for this server is ", wOffset, " days**"))
@@ -380,7 +380,7 @@ func handleCommand(session *discord.Session, data *discord.MessageCreate, guild 
 		// Get the current offset
 		wOffset := fmt.Sprint(guildData.FirstWarnOffset)
 		if guildData.FirstWarnOffset == -1 {
-			wOffset = fmt.Sprint(guildData.MaxDayInactivity/2, "(auto)")
+			wOffset = fmt.Sprint(guildData.MaxDayInactivity/2, " (auto)")
 		}
 
 		session.ChannelMessageSend(data.ChannelID, fmt.Sprint("**Warning timeout for this server set to ", wOffset, " days**"))
